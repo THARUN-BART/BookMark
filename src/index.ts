@@ -4,6 +4,7 @@ import { connectDB } from "./config/db";
 import authRouter from "./module/auth/auth.routes";
 import bookmarkRouter from "./module/bookmark/bookmark.routes";
 import folderRouter from "./module/folder/folder.routes";
+import tagRouter from "./module/tag/tag.routes";
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -27,6 +28,9 @@ app.use("/api/bookmarks", bookmarkRouter);
 
 // Folder endpoints (Protected by authenticate)
 app.use("/api/folders", folderRouter);
+
+// Tag endpoints (Protected by authenticate)
+app.use("/api/tags", tagRouter);
 
 async function startServer() {
   // 1. Verify database connection first
