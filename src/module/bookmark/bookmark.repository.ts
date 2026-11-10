@@ -14,8 +14,6 @@ class BookmarkRepository {
         isFavorite: data.isFavorite ?? false,
         userId,
         folderId: data.folderId,
-
-        // 🏷️ Connect multiple existing tags by ID
         tags:
           data.tagIds && data.tagIds.length > 0
             ? {
@@ -30,37 +28,50 @@ class BookmarkRepository {
     });
   }
 
-  // 2. FETCH ALL (Supports filtering by folderId, tagId, isFavorite)
+  // 2. FETCH ALL (Search title/URL + Filter folder/tag/favorite + Sort)
   async fetchBookmarks(userId: string, filter?: BookmarkFilterDto) {
     return prisma.bookmark.findMany({
       where: {
         userId,
         deletedAt: null,
 
-        // 📂 Filter by folder if requested
+        // 🔍 Search title OR URL (Case-insensitive)
+        ...(filter?.search && {
+          OR: [
+            { title: { contains: filter.search, mode: "insensitive" } },
+            { url: { contains: filter.search, mode: "insensitive" } },
+          ],
+        }),
+
+        // 📂 Filter by folder
         ...(filter?.folderId && { folderId: filter.folderId }),
 
-        // 🏷️ Filter by tag if requested (checks if at least one tag matches)
+        // 🏷️ Filter by tag
         ...(filter?.tagId && {
           tags: {
             some: { id: filter.tagId },
           },
         }),
 
-        // ⭐ Filter by favorite status if requested
+        // ⭐ Filter by favorite
         ...(filter?.isFavorite !== undefined && { isFavorite: filter.isFavorite }),
       },
       include: {
         folder: { select: { id: true, name: true } },
         tags: { select: { id: true, name: true } },
+        shares: {
+          include: {
+            sharedWith: { select: { id: true, name: true, email: true } },
+          },
+        },
       },
       orderBy: {
-        createdAt: "desc",
+        [filter?.sortBy || "createdAt"]: filter?.order || "desc",
       },
     });
   }
 
-  // 3. FETCH SINGLE BY ID (includes its folder and tags)
+  // 3. FETCH SINGLE BY ID
   async findById(id: string, userId: string) {
     return prisma.bookmark.findFirst({
       where: {
@@ -71,11 +82,16 @@ class BookmarkRepository {
       include: {
         folder: { select: { id: true, name: true } },
         tags: { select: { id: true, name: true } },
+        shares: {
+          include: {
+            sharedWith: { select: { id: true, name: true, email: true } },
+          },
+        },
       },
     });
   }
 
-  // 4. UPDATE BOOKMARK (Move folder, re-assign tags, edit details)
+  // 4. UPDATE BOOKMARK
   async updateBookmark(id: string, userId: string, data: UpdateBookmarkDto) {
     const { tagIds, ...fields } = data;
 
@@ -83,8 +99,6 @@ class BookmarkRepository {
       where: { id },
       data: {
         ...fields,
-
-        // 🏷️ "set" replaces existing tags with the new tag list
         ...(tagIds && {
           tags: {
             set: tagIds.map((tagId) => ({ id: tagId })),
@@ -98,7 +112,7 @@ class BookmarkRepository {
     });
   }
 
-  // 5. SOFT DELETE (Instant & safe - moves to trash)
+  // 5. SOFT DELETE
   async deleteBookmark(id: string, userId: string) {
     return prisma.bookmark.updateMany({
       where: {
@@ -112,40 +126,114 @@ class BookmarkRepository {
     });
   }
 
-  // 6. RESTORE (Moves back from trash)
+  // 6. RESTORE
   async restoreBookmark(id: string, userId: string) {
     return prisma.bookmark.updateMany({
-      where: {
-        id,
-        userId,
-      },
-      data: {
-        deletedAt: null,
-      },
+      where: { id, userId },
+      data: { deletedAt: null },
     });
   }
 
-  // 7. PERMANENT DELETE (Hard delete from database)
+  // 7. PERMANENT DELETE
   async permanentDelete(id: string, userId: string) {
     return prisma.bookmark.deleteMany({
+      where: { id, userId },
+    });
+  }
+
+  // 8. AUTO-CLEANUP
+  async purgeOldTrash(days: number = 30) {
+    const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    return prisma.bookmark.deleteMany({
       where: {
-        id,
-        userId,
+        deletedAt: { not: null, lt: cutoffDate },
       },
     });
   }
 
-  // 8. AUTO-CLEANUP: Permanently remove items in trash older than X days
-  async purgeOldTrash(days: number = 30) {
-    const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  // 🌐 9. PUBLIC LINK: SHARE
+  async shareLink(id: string, userId: string, shareCode: string) {
+    return prisma.bookmark.updateMany({
+      where: { id, userId, deletedAt: null },
+      data: { isPublic: true, shareCode },
+    });
+  }
 
-    return prisma.bookmark.deleteMany({
+  // 🌐 10. PUBLIC LINK: UNSHARE
+  async unshareLink(id: string, userId: string) {
+    return prisma.bookmark.updateMany({
+      where: { id, userId, deletedAt: null },
+      data: { isPublic: false, shareCode: null },
+    });
+  }
+
+  // 🌐 11. PUBLIC LINK: GET BY SHARE CODE
+  async findPublicByShareCode(shareCode: string) {
+    return prisma.bookmark.findFirst({
       where: {
-        deletedAt: {
-          not: null,
-          lt: cutoffDate,
+        shareCode,
+        isPublic: true,
+        deletedAt: null,
+      },
+      include: {
+        user: { select: { name: true } },
+        tags: { select: { id: true, name: true } },
+      },
+    });
+  }
+
+  // 🤝 12. PRIVATE USER SHARING: SHARE WITH SPECIFIC USER
+  async shareWithUser(bookmarkId: string, sharedWithId: string) {
+    return prisma.bookmarkShare.create({
+      data: {
+        bookmarkId,
+        sharedWithId,
+      },
+      include: {
+        sharedWith: { select: { id: true, name: true, email: true } },
+      },
+    });
+  }
+
+  // 🤝 13. PRIVATE USER SHARING: REVOKE USER SHARE
+  async unshareWithUser(bookmarkId: string, sharedWithId: string) {
+    return prisma.bookmarkShare.deleteMany({
+      where: {
+        bookmarkId,
+        sharedWithId,
+      },
+    });
+  }
+
+  // 🤝 14. PRIVATE USER SHARING: GET BOOKMARKS SHARED WITH ME
+  async fetchSharedWithMe(userId: string) {
+    const shares = await prisma.bookmarkShare.findMany({
+      where: {
+        sharedWithId: userId,
+        bookmark: {
+          deletedAt: null,
         },
       },
+      include: {
+        bookmark: {
+          include: {
+            user: { select: { id: true, name: true, email: true } },
+            tags: { select: { id: true, name: true } },
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    return shares.map((s) => s.bookmark);
+  }
+
+  // Helper: Find user by email
+  async findUserByEmail(email: string) {
+    return prisma.user.findUnique({
+      where: { email },
     });
   }
 }

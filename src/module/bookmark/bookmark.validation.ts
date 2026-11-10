@@ -7,8 +7,8 @@ export const createBookmarkSchema = z.object({
   favicon: z.string().url().optional().or(z.literal("")),
   previewImage: z.string().url().optional().or(z.literal("")),
   isFavorite: z.boolean().optional(),
-  folderId: z.string().uuid("Invalid folder ID").optional(), 
-  tagIds: z.array(z.string().uuid("Invalid tag ID")).optional(), 
+  folderId: z.string().uuid("Invalid folder ID").optional(),
+  tagIds: z.array(z.string().uuid("Invalid tag ID")).optional(),
 });
 
 export const updateBookmarkSchema = z.object({
@@ -21,4 +21,8 @@ export const updateBookmarkSchema = z.object({
   isArchived: z.boolean().optional(),
   folderId: z.string().uuid("Invalid folder ID").nullable().optional(),
   tagIds: z.array(z.string().uuid("Invalid tag ID")).optional(),
+});
+
+export const shareWithUserSchema = z.object({
+  email: z.string().email("Invalid email format"),
 });
