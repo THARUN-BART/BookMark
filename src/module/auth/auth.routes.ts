@@ -16,6 +16,7 @@ authRouter.post("/register", validate(registerSchema), (req, res) => authControl
 authRouter.post("/verify-otp", validate(verifyOtpSchema), (req, res) => authController.verifyOtp(req, res));
 authRouter.post("/resend-otp", validate(resendOtpSchema), (req, res) => authController.resendOtp(req, res));
 authRouter.post("/login", validate(loginSchema), (req, res) => authController.login(req, res));
+authRouter.post("/logout", (req, res) => authController.logout(req, res));
 authRouter.post("/forgot-password", validate(forgotPasswordSchema), (req, res) => authController.forgotPassword(req, res));
 authRouter.post("/reset-password", validate(resetPasswordSchema), (req, res) => authController.resetPassword(req, res));
 

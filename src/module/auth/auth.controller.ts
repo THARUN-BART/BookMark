@@ -34,10 +34,24 @@ class AuthController {
     async login(req: Request, res: Response) {
     try {
         const result = await authService.login(req.body);
+        
+        // Set HTTP-only secure cookie
+        res.cookie("token", result.token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        });
+
         return res.status(200).json({ success: true, ...result });
     } catch (error: any) {
         return res.status(401).json({ success: false, message: error.message }); 
     }
+    } 
+
+    async logout(req: Request, res: Response) {
+      res.clearCookie("token");
+      return res.status(200).json({ success: true, message: "Logged out successfully" });
     } 
 
     async forgotPassword(req: Request, res: Response) {
