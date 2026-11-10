@@ -3,6 +3,7 @@ import cookieParser from "cookie-parser";
 import { connectDB } from "./config/db";
 import authRouter from "./module/auth/auth.routes";
 import bookmarkRouter from "./module/bookmark/bookmark.routes";
+import folderRouter from "./module/folder/folder.routes";
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -23,6 +24,9 @@ app.use("/api/auth", authRouter);
 
 // Bookmark endpoints (Protected by authenticate)
 app.use("/api/bookmarks", bookmarkRouter);
+
+// Folder endpoints (Protected by authenticate)
+app.use("/api/folders", folderRouter);
 
 async function startServer() {
   // 1. Verify database connection first

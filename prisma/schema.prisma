@@ -1,9 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,23 +11,57 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
+  id        String     @id @default(uuid())
   name      String
-  email     String   @unique
+  email     String     @unique
   password  String
-  age Int
-  verified  Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  age       Int
+  verified  Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
   bookmarks Bookmark[]
+  folders   Folder[]
+  tags      Tag[]
 }
 
-model Bookmark{
-  id String @id @default(uuid())
-  url String 
-  title String
-  description String?
+// 📂 FOLDER MODEL (1 User has Many Folders, 1 Folder has Many Bookmarks)
+model Folder {
+  id        String     @id @default(uuid())
+  name      String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  bookmarks Bookmark[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+// 🏷️ TAG MODEL (Many Bookmarks can have Many Tags)
+model Tag {
+  id        String     @id @default(uuid())
+  name      String
+  createdAt DateTime   @default(now())
+
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  bookmarks Bookmark[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+// 🔖 BOOKMARK MODEL
+model Bookmark {
+  id           String    @id @default(uuid())
+  url          String
+  title        String
+  description  String?
   favicon      String?
   previewImage String?
   isFavorite   Boolean   @default(false)
@@ -39,9 +70,16 @@ model Bookmark{
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  userId String
-  user User @relation(fields: [userId],references: [id],onDelete: Cascade)
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 📂 Bookmark belongs to 1 optional Folder
+  folderId     String?
+  folder       Folder?   @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
+  // 🏷️ Bookmark can have Many Tags
+  tags         Tag[]
 
   @@index([userId])
-
+  @@index([folderId])
 }
