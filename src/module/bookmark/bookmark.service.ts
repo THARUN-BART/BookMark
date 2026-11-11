@@ -6,16 +6,33 @@ import type {
   ShareWithUserDto,
 } from "./bookmark.dto";
 import { bookmarkRepo } from "./bookmark.repository";
+import { getOrSetCache, invalidateCache } from "../../utils/cache";
 
 class BookmarkService {
   // 1. CREATE BOOKMARK
   async create(userId: string, dto: CreateBookmarkDto) {
-    return bookmarkRepo.createBookmark(userId, dto);
+    const bookmark = await bookmarkRepo.createBookmark(userId, dto);
+    await invalidateCache(`bookmarks:${userId}`);
+    return bookmark;
   }
 
-  // 2. GET ALL BOOKMARKS (Search, Filter, Sort)
+  // 2. GET ALL BOOKMARKS (Search, Filter, Sort, Redis Caching)
   async getAll(userId: string, filter?: BookmarkFilterDto) {
-    return bookmarkRepo.fetchBookmarks(userId, filter);
+    // If user is searching or applying filters, bypass cache and query DB directly
+    if (
+      filter?.search ||
+      filter?.folderId ||
+      filter?.tagId ||
+      filter?.isFavorite !== undefined ||
+      filter?.sortBy
+    ) {
+      return bookmarkRepo.fetchBookmarks(userId, filter);
+    }
+
+    // Default bookmark feed: Cached in Redis for 1 hour (3600 seconds)
+    return getOrSetCache(`bookmarks:${userId}`, 3600, () => {
+      return bookmarkRepo.fetchBookmarks(userId, filter);
+    });
   }
 
   // 3. GET SINGLE BOOKMARK BY ID
@@ -31,6 +48,7 @@ class BookmarkService {
   async update(id: string, userId: string, dto: UpdateBookmarkDto) {
     await this.getById(id, userId);
     await bookmarkRepo.updateBookmark(id, userId, dto);
+    await invalidateCache(`bookmarks:${userId}`);
     return bookmarkRepo.findById(id, userId);
   }
 
@@ -38,6 +56,7 @@ class BookmarkService {
   async softDelete(id: string, userId: string) {
     await this.getById(id, userId);
     await bookmarkRepo.deleteBookmark(id, userId);
+    await invalidateCache(`bookmarks:${userId}`);
     return { message: "Bookmark moved to trash successfully" };
   }
 
@@ -47,6 +66,7 @@ class BookmarkService {
     if (result.count === 0) {
       throw new Error("Bookmark not found in trash");
     }
+    await invalidateCache(`bookmarks:${userId}`);
     return { message: "Bookmark restored successfully" };
   }
 
@@ -56,6 +76,7 @@ class BookmarkService {
     if (result.count === 0) {
       throw new Error("Bookmark not found");
     }
+    await invalidateCache(`bookmarks:${userId}`);
     return { message: "Bookmark permanently deleted" };
   }
 

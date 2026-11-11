@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authController } from "./auth.controller";
 import { validate } from "../../middlewares/validate";
+import { rateLimiter } from "../../middlewares/rateLimiter";
 import {
   registerSchema,
   loginSchema,
@@ -11,6 +12,9 @@ import {
 } from "./auth.validation";
 
 const authRouter = Router();
+
+// 🔒 Strict Rate Limiter: Max 10 attempts per 15 minutes (900 seconds)
+authRouter.use(rateLimiter(10, 900));
 
 authRouter.post("/register", validate(registerSchema), (req, res) => authController.register(req, res));
 authRouter.post("/verify-otp", validate(verifyOtpSchema), (req, res) => authController.verifyOtp(req, res));
