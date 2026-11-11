@@ -1,0 +1,108 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String          @id @default(uuid())
+  name         String
+  email        String          @unique
+  password     String
+  age          Int
+  verified     Boolean         @default(false)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  bookmarks    Bookmark[]
+  folders      Folder[]
+  tags         Tag[]
+  sharedWithMe BookmarkShare[] // Bookmarks other users shared with this user
+}
+
+// 📂 FOLDER MODEL (1 User has Many Folders, 1 Folder has Many Bookmarks)
+model Folder {
+  id        String     @id @default(uuid())
+  name      String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  bookmarks Bookmark[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+// 🏷️ TAG MODEL (Many Bookmarks can have Many Tags)
+model Tag {
+  id        String     @id @default(uuid())
+  name      String
+  createdAt DateTime   @default(now())
+
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  bookmarks Bookmark[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+// 🔖 BOOKMARK MODEL
+model Bookmark {
+  id           String          @id @default(uuid())
+  url          String
+  title        String
+  description  String?
+  favicon      String?
+  previewImage String?
+  isFavorite   Boolean         @default(false)
+  isArchived   Boolean         @default(false)
+  isPublic     Boolean         @default(false)
+  shareCode    String?         @unique
+  deletedAt    DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  userId       String
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 📂 Bookmark belongs to 1 optional Folder
+  folderId     String?
+  folder       Folder?         @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
+  // 🏷️ Bookmark can have Many Tags
+  tags         Tag[]
+
+  // 🤝 People this bookmark is privately shared with
+  shares       BookmarkShare[]
+
+  @@index([userId])
+  @@index([folderId])
+}
+
+// 🤝 JUNCTION TABLE: Private sharing with a specific registered user
+model BookmarkShare {
+  id           String   @id @default(uuid())
+  bookmarkId   String
+  bookmark     Bookmark @relation(fields: [bookmarkId], references: [id], onDelete: Cascade)
+
+  sharedWithId String
+  sharedWith   User     @relation(fields: [sharedWithId], references: [id], onDelete: Cascade)
+
+  createdAt    DateTime @default(now())
+
+  // A bookmark cannot be shared with the same user twice
+  @@unique([bookmarkId, sharedWithId])
+  @@index([sharedWithId])
+  @@index([bookmarkId])
+}
